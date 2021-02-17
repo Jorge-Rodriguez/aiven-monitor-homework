@@ -11,6 +11,21 @@ from url_monitor.interfaces import Runnable
 
 
 class Writer(Runnable):
+    """Database writer runnable.
+
+    Encapsulates the message listener and database persistence loop.
+
+    Args:
+        arguments (dict): The configuration dictionary as specified by `CONFIG_SCHEMA`.
+
+    Attributes:
+        consumer(confluent_kafka.Consumer): A Kafka Consumer object.
+        topics (list): A list of Kafka topics to subscribe to.
+        batch_size (int): The number of messages to read from the topic on each iteration
+                          as specified by `prefetch_count` in the `kafka` configuration.
+        db_conn (psycopg2.Connection): A postgresql connection object.
+
+    """
 
     CONFIG_SCHEMA = Schema(
         {
@@ -31,29 +46,51 @@ class Writer(Runnable):
         self.init_db()
 
     def __del__(self):
+        """Ensure all connections are properly closed."""
         self.db_conn.close()
         self.consumer.close()
 
     def run(self):
-        self.consumer.subscribe(self.topics)
-        while self.RUNNING:
-            try:
-                messages = self.consumer.consume(num_messages=self.batch_size)
-            except KafkaError as e:
-                self.logger.error(
-                    "An error occurred while consuming messages: %s", e.reason
-                )
-                continue
+        """Main execution loop.
 
-            # Commit before processing for an "at most once" delivery strategy.
-            self.consumer.commit(asynchronous=False)
-            with ThreadPoolExecutor(
-                max_workers=self.batch_size + 10 - (self.batch_size % 10)
-            ) as executor:
+        Each iteration of the loop consumes at most `batch_size` messages from
+        the subscribed topics. A thread pool with as many workers as `batch_size`
+        rounded to the next ten handles the high-latency database writes in parallel.
+
+        """
+        self.consumer.subscribe(self.topics)
+        with ThreadPoolExecutor(
+            max_workers=self.batch_size + 10 - (self.batch_size % 10)
+        ) as executor:
+            while self.RUNNING:
+                try:
+                    messages = self.consumer.consume(num_messages=self.batch_size)
+                except KafkaError as e:
+                    self.logger.error(
+                        "An error occurred while consuming messages: %s", e.reason
+                    )
+                    continue
+
+                # Commit before processing for an "at most once" delivery strategy.
+                self.consumer.commit(asynchronous=False)
                 for message in messages:
                     executor.submit(self.write, message)
 
     def write(self, message):
+        """Database writer.
+
+        Persists a message to the postgresql database.
+        The message value is expected to be a JSON with the following keys:
+            - "url"
+            - "ts"
+            - "status"
+            - "latency"
+            - "regex_match" (optional)
+
+        Args:
+            message (confluent_kafka.Message): The message as received from the Kafka topic.
+
+        """
         if message.error() is None:
             self.logger.info("Writing message to database")
             payload = json.loads(message.value())
@@ -100,6 +137,14 @@ class Writer(Runnable):
             self.logger.warn("Received an error message. Ignoring.")
 
     def init_db(self):
+        """Database initializer
+
+        Creates the following tables in the database if they do not exist:
+            - "monitored_urls": holds the monitored urls and their respective IDs.
+            - "status": holds the URL checks' timestamp, status and latency.
+            - "regex_check": holds the result of the regex searches for the URL checks.
+
+        """
         with self.db_conn.cursor() as cursor:
             self.logger.info("Creating 'monitored_urls' table")
             cursor.execute(
