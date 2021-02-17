@@ -1,0 +1,5 @@
+confluent-kafka
+docopt
+psycopg2-binary
+PyYAML
+schema
