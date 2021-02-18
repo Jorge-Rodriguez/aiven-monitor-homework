@@ -16,6 +16,8 @@ To deploy the application run:
 $ terraform apply
 ```
 
+The `targets` input variable needs to be defined.
+
 ## Testing
 ### Unit tests
 Unit tests are run automatically during the creation of the docker image.
