@@ -64,7 +64,7 @@ class Monitor(Runnable):
     def __init__(self, arguments):
         self.logger = logging.getLogger("Monitor")
         self.config = arguments["targets"]
-        self.producer = Producer(arguments["kafka"]["connection"])
+        self.producer = Producer(**arguments["kafka"]["connection"])
         self.topic = arguments["kafka"]["topic"]
 
     def run(self):

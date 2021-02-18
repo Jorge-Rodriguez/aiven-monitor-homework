@@ -38,10 +38,10 @@ class Writer(Runnable):
 
     def __init__(self, arguments):
         self.logger = logging.getLogger("Writer")
-        self.consumer = Consumer(arguments["kafka"]["connection"])
+        self.consumer = Consumer(**arguments["kafka"]["connection"])
         self.topics = arguments["kafka"]["topics"]
         self.batch_size = arguments["kafka"]["prefetch_count"]
-        self.db_conn = connect(*arguments["postgres"])
+        self.db_conn = connect(**arguments["postgres"])
 
         self.init_db()
 
