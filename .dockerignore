@@ -1,0 +1,16 @@
+**/.pytest_cache/*
+**/__pycache__/*
+**/configs/*
+**/integration/*
+**/.terraform/*
+**/.git/*
+Dockerfile
+*.tf
+*.tfvars
+LICENSE
+README.md
+pyproject.toml
+.gitignore
+.dockerignore
+.terraform.lock.hcl
+**/*.tfstate
