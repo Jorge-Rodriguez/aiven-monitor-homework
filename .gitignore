@@ -34,3 +34,6 @@ configs/*.yaml
 
 # Python cache
 **/__pycache__/*
+
+# Tox
+**/.tox/*
