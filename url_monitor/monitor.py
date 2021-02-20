@@ -12,17 +12,22 @@ from schema import And, Optional, Schema, Use
 
 from url_monitor.interfaces import Runnable
 
+logging.basicConfig(level=logging.INFO)
+
 
 class JSONDatetimeEncoder(json.JSONEncoder):
     """JSON encoder with datetime serialization capabilities.
 
-    Serializes `datetime.datetime` types as their `isoformat` representation.
+    Serializes `datetime.datetime` types as their `isoformat` representation
+    and `datetime.timedelta` types as their `total_seconds` representation.
 
     """
 
     def default(self, obj):
         if isinstance(obj, datetime):
             return obj.isoformat()
+        if isinstance(obj, timedelta):
+            return obj.total_seconds()
         return super(JSONDatetimeEncoder, self).default(obj)
 
 
@@ -76,11 +81,13 @@ class Monitor(Runnable):
         monitors a single target.
 
         """
+        self.logger.info("Starting execution loop...")
         with ThreadPoolExecutor(
             max_workers=len(self.config) + 10 - (len(self.config) % 10)
         ) as executor:
             for target in self.config:
                 executor.submit(self.monitor, target)
+            executor.shutdown(wait=True)
 
     def monitor(self, target):
         """Busy monitoring loop.
@@ -112,6 +119,9 @@ class Monitor(Runnable):
                 self.logger.warning("Check for %s timed out", target["url"])
             except RequestException as e:
                 self.logger.error(e)
+            except re.error as e:
+                self.logger.error(e)
+                break
 
             # Busy loop until next check_time
             while datetime.now() < next_check:
@@ -128,22 +138,7 @@ class Monitor(Runnable):
             regex (str | None): The regular expression to look for in the response body.
             ts (datetime.datetime): The timestamp of the target check.
         """
-
-        def log_produced(err, msg):
-            """Kafka producer callback.
-
-            Logs whether a message was properly produced or not.
-
-            Args:
-                err (str): An error message.
-                msg (str): The produced message.
-            """
-            if err is not None:
-                self.logger.warning(
-                    "Failed to deliver message: %s.  Error: %s", msg, err
-                )
-            else:
-                self.logger.info("Produced message: %s", msg)
+        self.logger.info("Producing message...")
 
         payload = {
             "url": response.url,
@@ -153,16 +148,37 @@ class Monitor(Runnable):
         }
 
         if regex:
-            payload["regex_match"] = bool(re.search(regex, response.text))
+            try:
+                payload["regex_match"] = bool(re.search(regex, response.text))
+            except re.error as e:
+                raise e
 
         try:
             self.producer.produce(
                 self.topic,
                 value=json.dumps(payload, cls=JSONDatetimeEncoder),
-                callback=log_produced,
+                callback=_log_produced,
             )
             self.producer.poll(1)
         except KafkaException as e:
             self.logger.error(
                 "An error occurred while producing a message: %s", e.args[0].reason
             )
+
+
+def _log_produced(err, msg):
+    """Kafka producer callback.
+
+    Logs whether a message was properly produced or not.
+
+    Args:
+        err (str): An error message.
+        msg (str): The produced message.
+    """
+    logger = logging.getLogger("ProducerCallback")
+    if err is not None:
+        logger.warning(
+            "Failed to deliver message at: %s.  Error: %s", msg.timestamp(), err
+        )
+    else:
+        logger.info("Produced message at: %s", msg.timestamp())
