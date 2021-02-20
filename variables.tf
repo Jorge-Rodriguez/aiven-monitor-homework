@@ -11,4 +11,5 @@ variable "targets" {
     frequency = number
     regex     = optional(string)
   }))
+  default = null
 }
