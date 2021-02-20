@@ -28,5 +28,6 @@ Alternatively, they can also be run with `pytest` assuming that the utility's de
 Integration tests are automated with Terraform and can be run as follows:
 
 ```
-$ terraform apply -var="integration=true"
+$ terraform apply --var="integration=true"
+$ terraform destroy --var="integration=true"
 ```
