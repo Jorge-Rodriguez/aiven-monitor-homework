@@ -16,7 +16,8 @@ To deploy the application run:
 $ terraform apply
 ```
 
-The `targets` input variable needs to be defined.
+The `targets` input variable needs to be defined, see the [variables file](variables.tf)
+
 
 ## Testing
 ### Unit tests
