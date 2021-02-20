@@ -24,16 +24,16 @@ class Writer(Runnable):
     Attributes:
         consumer(confluent_kafka.Consumer): A Kafka Consumer object.
         topics (list): A list of Kafka topics to subscribe to.
-        batch_size (int): The number of messages to read from the topic on each iteration
-                          as specified by `prefetch_count` in the `kafka` configuration.
+        batch_size (int): The number of messages to persist to the database in parallel
+                          as specified by `batch_size` in the `postgres` configuration.
         db_conn (psycopg2.Connection): A postgresql connection object.
 
     """
 
     CONFIG_SCHEMA = Schema(
         {
-            "kafka": {"connection": dict, "topics": [str], "prefetch_count": int},
-            "postgres": dict,
+            "kafka": {"connection": dict, "topics": [str]},
+            "postgres": {"connection": dict, "batch_size": int}
         }
     )
 
@@ -43,8 +43,8 @@ class Writer(Runnable):
         self.logger = logging.getLogger("Writer")
         self.consumer = Consumer(**arguments["kafka"]["connection"])
         self.topics = arguments["kafka"]["topics"]
-        self.batch_size = arguments["kafka"]["prefetch_count"]
-        self.db_conn = connect(**arguments["postgres"])
+        self.batch_size = arguments["postgres"]["batch_size"]
+        self.db_conn = connect(**arguments["postgres"]["connection"])
         self.db_conn.set_session(autocommit=True)
 
         self.init_db()
