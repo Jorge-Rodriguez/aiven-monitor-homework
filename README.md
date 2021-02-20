@@ -32,3 +32,6 @@ Integration tests are automated with Terraform and can be run as follows:
 $ terraform apply --var="integration=true"
 $ terraform destroy --var="integration=true"
 ```
+
+## Terraform note
+The terraform code provides no configuration for the terraform Aiven provider, this means that running terraform operations on the code as-is will result in an error. It is necessary to set either the `api_token` provider parameter or the `AIVEN_TOKEN` environment variable.
