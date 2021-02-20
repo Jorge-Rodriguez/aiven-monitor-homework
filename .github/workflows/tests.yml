@@ -1,0 +1,63 @@
+name: Automated Tests
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  tests:
+    name: Run tests
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      AIVEN_TOKEN: ${{ secrets.AIVEN_TOKEN }}
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.8
+
+      - name: Update PIP
+        run: python -m pip install --upgrade pip
+
+      - name: Install tox
+        run: pip install tox
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: 0.14.2
+          terraform_wrapper: false
+
+      - name: Setup Docker
+        uses: docker-practice/actions-setup-docker@1.0.4
+
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Unit Tests
+        run: tox
+
+      - name: Initialize Terraform
+        run: terraform init
+
+      - name: Validate Terraform
+        run: terraform validate
+
+      - name: Refresh Terraform state
+        run: terraform refresh --var="integration=true"
+
+      - name: Terraform Plan
+        run: terraform plan -refresh=false -input=false -lock-timeout=300s --var="integration=true"
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false -lock-timeout=300s --var="integration=true"
+
+      - name: Destroy Terraform resources
+        run: terraform destroy -auto-approve -input=false -lock-timeout=300s --var="integration=true"
