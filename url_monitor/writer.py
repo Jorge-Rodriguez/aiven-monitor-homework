@@ -2,12 +2,15 @@ import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
-from confluent_kafka import Consumer, KafkaError
+from confluent_kafka import Consumer
 from psycopg2 import connect
 from psycopg2.extras import DictCursor
+from psycopg2.sql import SQL, Identifier
 from schema import Schema
 
 from url_monitor.interfaces import Runnable
+
+logging.basicConfig(level=logging.INFO)
 
 
 class Writer(Runnable):
@@ -42,6 +45,7 @@ class Writer(Runnable):
         self.topics = arguments["kafka"]["topics"]
         self.batch_size = arguments["kafka"]["prefetch_count"]
         self.db_conn = connect(**arguments["postgres"])
+        self.db_conn.set_session(autocommit=True)
 
         self.init_db()
 
@@ -91,25 +95,29 @@ class Writer(Runnable):
 
             with self.db_conn.cursor(cursor_factory=DictCursor) as cursor:
                 cursor.execute(
-                    """
+                    SQL(  # See https://stackoverflow.com/a/6722460
+                        """
                     WITH insert_row AS (
-                        INSERT INTO monitored_urls (url)
+                        INSERT INTO {} (url)
                         SELECT %(url)s WHERE NOT EXISTS (
-                            SELECT * FROM monitored_urls WHERE url = %(url)s
+                            SELECT * FROM urls WHERE url = %(url)s
                         )
                         RETURNING *
                     )
                     SELECT * FROM insert_row
                     UNION
-                    SELECT * FROM monitored_urls WHERE url = %(url)s
-                    """,
+                    SELECT * FROM urls WHERE url = %(url)s
+                    """
+                    ).format(Identifier("urls")),
                     {"url": payload["url"]},
                 )
 
-                url_id = cursor.fetch_one()["id"]
+                url_id = cursor.fetchone()["id"]
 
                 cursor.execute(
-                    "INSERT INTO status VALUES (%(url_id)s, %(ts)s, %(status)s, %(latency)s)",
+                    SQL(
+                        "INSERT INTO {} VALUES (%(url_id)s, %(ts)s, %(status)s, %(latency)s)"
+                    ).format(Identifier("status")),
                     {
                         "url_id": url_id,
                         "ts": payload["check_time"],
@@ -120,13 +128,16 @@ class Writer(Runnable):
 
                 if payload.get("regex_match"):
                     cursor.execute(
-                        "INSERT INTO regex_check VALUES (%(url_id)s, %(ts)s, %(match)s)",
+                        SQL(
+                            "INSERT INTO {} VALUES (%(url_id)s, %(ts)s, %(match)s)"
+                        ).format(Identifier("regex")),
                         {
                             "url_id": url_id,
                             "ts": payload["check_time"],
                             "match": payload["regex_match"],
                         },
                     )
+
         else:
             self.logger.warn("Received an error message. Ignoring.")
 
@@ -134,43 +145,49 @@ class Writer(Runnable):
         """Database initializer
 
         Creates the following tables in the database if they do not exist:
-            - "monitored_urls": holds the monitored urls and their respective IDs.
+            - "urls": holds the monitored urls and their respective IDs.
             - "status": holds the URL checks' timestamp, status and latency.
-            - "regex_check": holds the result of the regex searches for the URL checks.
+            - "regex": holds the result of the regex searches for the URL checks.
 
         """
         with self.db_conn.cursor() as cursor:
-            self.logger.info("Creating 'monitored_urls' table")
+            self.logger.info("Creating 'urls' table")
             cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS monitored_urls (
+                SQL(
+                    """
+                CREATE TABLE IF NOT EXISTS {} (
                     id SERIAL PRIMARY KEY,
                     url TEXT NOT NULL UNIQUE
                 )
                 """
+                ).format(Identifier("urls"))
             )
 
             self.logger.info("Creating 'status' table")
             cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS status (
-                    url_id INTEGER REFERENCES monitored_urls (id),
-                    timestamp TIMESTAMP,
+                SQL(
+                    """
+                CREATE TABLE IF NOT EXISTS {} (
+                    url_id INTEGER REFERENCES {} (id),
+                    ts TIMESTAMP,
                     status INTEGER,
                     latency DECIMAL,
-                    PRIMARY KEY (url_id, timestamp)
+                    PRIMARY KEY (url_id, ts)
                 )
                 """
+                ).format(Identifier("status"), Identifier("urls"))
             )
 
-            self.logger.info("Creating 'regex_check' table")
+            self.logger.info("Creating 'regex' table")
             cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS regex_check (
-                    url_id INTEGER REFERENCES monitored_urls (id),
-                    timestamp TIMESTAMP,
+                SQL(
+                    """
+                CREATE TABLE IF NOT EXISTS {} (
+                    url_id INTEGER REFERENCES {} (id),
+                    ts TIMESTAMP,
                     regex_match BOOLEAN,
-                    PRIMARY KEY (url_id, timestamp)
+                    PRIMARY KEY (url_id, ts)
                 )
                 """
+                ).format(Identifier("regex"), Identifier("urls"))
             )
