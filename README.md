@@ -19,7 +19,9 @@ $ terraform apply
 The `targets` input variable needs to be defined, see the [variables file](variables.tf)
 
 
-## Testing
+## Testing [![Automated Tests](https://github.com/Jorge-Rodriguez/aiven-monitor-homework/actions/workflows/tests.yml/badge.svg)](https://github.com/Jorge-Rodriguez/aiven-monitor-homework/actions/workflows/tests.yml)
+Unit and integration testing is run automatically via GitHub actions on push to the `main` branch.
+
 ### Unit tests
 Unit tests are run automatically during the creation of the docker image.
 They can however, be run manually by running `tox` on the repository root.
