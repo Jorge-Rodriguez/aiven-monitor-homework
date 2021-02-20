@@ -10,5 +10,5 @@ envlist = py38
 [testenv]
 deps = pytest
 
-commands = pytest
+commands = pytest --ignore=integration
 """
