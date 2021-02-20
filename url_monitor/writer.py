@@ -58,23 +58,17 @@ class Writer(Runnable):
         rounded to the next ten handles the high-latency database writes in parallel.
 
         """
+        self.logger.info("Starting executor loop...")
         self.consumer.subscribe(self.topics)
         with ThreadPoolExecutor(
             max_workers=self.batch_size + 10 - (self.batch_size % 10)
         ) as executor:
             while self.RUNNING:
-                try:
-                    messages = self.consumer.consume(num_messages=self.batch_size)
-                except KafkaError as e:
-                    self.logger.error(
-                        "An error occurred while consuming messages: %s", e.reason
-                    )
-                    continue
+                message = self.consumer.poll()
 
                 # Commit before processing for an "at most once" delivery strategy.
                 self.consumer.commit(asynchronous=False)
-                for message in messages:
-                    executor.submit(self.write, message)
+                executor.submit(self.write, message)
 
     def write(self, message):
         """Database writer.
