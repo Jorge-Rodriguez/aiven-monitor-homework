@@ -22,6 +22,7 @@ The `targets` input variable needs to be defined, see the [variables file](varia
 ## Testing
 [![Automated Tests](https://github.com/Jorge-Rodriguez/aiven-monitor-homework/actions/workflows/tests.yml/badge.svg)](https://github.com/Jorge-Rodriguez/aiven-monitor-homework/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/Jorge-Rodriguez/aiven-monitor-homework/branch/main/graph/badge.svg?token=QFJ8H1DVK1)](https://codecov.io/gh/Jorge-Rodriguez/aiven-monitor-homework)
+
 Unit and integration testing is run automatically via GitHub actions on push to the `main` branch.
 
 ### Unit tests
