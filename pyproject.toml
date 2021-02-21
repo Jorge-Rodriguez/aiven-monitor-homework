@@ -12,5 +12,5 @@ deps =
     pytest
     pytest-cov
 
-commands = pytest --ignore=integration --cov=url_monitor
+commands = pytest --ignore=integration --cov=./ --cov-report=xml
 """
