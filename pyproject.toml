@@ -8,7 +8,9 @@ legacy_tox_ini = """
 envlist = py38
 
 [testenv]
-deps = pytest
+deps =
+    pytest
+    pytest-cov
 
-commands = pytest --ignore=integration
+commands = pytest --ignore=integration --cov=url_monitor
 """
